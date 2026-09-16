@@ -21,7 +21,9 @@ export interface TimerState {
   phase: TimerPhase | null
   mode: TimerMode
   sessionNumber: number
+  completedSessions: number
   totalFocusMs: number
+  longestFocusMs: number
   startedAt: number | null
   endsAt: number | null
   pausedRemaining: number | null
