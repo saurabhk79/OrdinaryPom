@@ -133,6 +133,18 @@ export function App() {
     return () => clearInterval(interval)
   }, [state])
 
+  useEffect(() => {
+    const onBeforeUnload = (event: BeforeUnloadEvent) => {
+      if (state?.status === 'running' || state?.status === 'paused') {
+        event.preventDefault()
+        event.returnValue = ''
+      }
+    }
+
+    window.addEventListener('beforeunload', onBeforeUnload)
+    return () => window.removeEventListener('beforeunload', onBeforeUnload)
+  }, [state])
+
   const applyState = async (command: TimerCommand) => {
     const next = await sendCommand(command)
     setState(next)
