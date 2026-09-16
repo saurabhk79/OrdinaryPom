@@ -1,0 +1,22 @@
+{
+  "manifest_version": 3,
+  "name": "OrdinaryPom",
+  "description": "A minimal Pomodoro timer with screen-fatigue protection.",
+  "version": "0.1.0",
+  "permissions": ["storage", "notifications", "alarms"],
+  "background": {
+    "service_worker": "assets/background.js",
+    "type": "module"
+  },
+  "action": {
+    "default_title": "OrdinaryPom",
+    "default_popup": "popup.html"
+  },
+  "content_scripts": [
+    {
+      "matches": ["http://*/*", "https://*/*"],
+      "js": ["assets/content.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}
