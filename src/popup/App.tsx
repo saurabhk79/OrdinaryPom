@@ -1,12 +1,19 @@
-import { useEffect, useState } from 'react'
-import { DEFAULT_MODE, MODES, type TimerMode, type TimerState } from '../types'
-import { STORAGE_KEY } from '../shared/constants'
+import { useEffect, useMemo, useState } from 'react'
+import {
+  DEFAULT_MODE,
+  MODES,
+  type DailyStats,
+  type DomainState,
+  type TimerMode,
+  type TimerState,
+} from '../types'
+import { DOMAIN_KEY, PREFERRED_MODE_KEY, STORAGE_KEY } from '../shared/constants'
 import { formatDuration, formatTotalMinutes } from '../shared/time'
 
 const MODE_LABELS: Record<TimerMode, string> = {
   lowEnergy: 'Low Energy',
   normal: 'Normal',
-  deepWork: 'Deep Work',
+  deepWork: 'Good',
 }
 
 type TimerCommand =
@@ -47,28 +54,75 @@ function computeRemainingMs(state: TimerState | null): number {
   return MODES[state.mode ?? DEFAULT_MODE].focus
 }
 
+function buildDomainStats(
+  domainState: DomainState | null,
+): { domain: string; ms: number }[] {
+  if (!domainState) return []
+
+  const totals = { ...domainState.totals }
+
+  if (domainState.currentDomain && domainState.startedAt) {
+    totals[domainState.currentDomain] =
+      (totals[domainState.currentDomain] ?? 0) +
+      (Date.now() - domainState.startedAt)
+  }
+
+  return Object.entries(totals)
+    .map(([domain, ms]) => ({ domain, ms }))
+    .sort((a, b) => b.ms - a.ms)
+    .slice(0, 3)
+}
+
 export function App() {
   const [state, setState] = useState<TimerState | null>(null)
   const [remainingMs, setRemainingMs] = useState(0)
   const [selectedMode, setSelectedMode] = useState<TimerMode>(DEFAULT_MODE)
+  const [domainState, setDomainState] = useState<DomainState | null>(null)
+  const [daily, setDaily] = useState<DailyStats | null>(null)
+
+  const dailyKey = useMemo(
+    () => `ordinaryPomDaily:${new Date().toLocaleDateString('en-CA')}`,
+    [],
+  )
 
   useEffect(() => {
-    void sendCommand({ type: 'getState' }).then(setState)
+    const load = async () => {
+      const [nextState, stored] = await Promise.all([
+        sendCommand({ type: 'getState' }),
+        chrome.storage.local.get([DOMAIN_KEY, PREFERRED_MODE_KEY, dailyKey]),
+      ])
+      setState(nextState)
+      setDomainState((stored[DOMAIN_KEY] as DomainState) ?? null)
+      setDaily((stored[dailyKey] as DailyStats) ?? null)
+      setSelectedMode(
+        (stored[PREFERRED_MODE_KEY] as TimerMode) ??
+          nextState.mode ??
+          DEFAULT_MODE,
+      )
+    }
 
-    const onChange = (changes: { [key: string]: chrome.storage.StorageChange }) => {
+    void load()
+
+    const onChange = (changes: {
+      [key: string]: chrome.storage.StorageChange
+    }) => {
       if (changes[STORAGE_KEY]) {
         setState(changes[STORAGE_KEY].newValue as TimerState)
+      }
+      if (changes[DOMAIN_KEY]) {
+        setDomainState(changes[DOMAIN_KEY].newValue as DomainState)
+      }
+      if (changes[dailyKey]) {
+        setDaily(changes[dailyKey].newValue as DailyStats)
       }
     }
 
     chrome.storage.local.onChanged.addListener(onChange)
     return () => chrome.storage.local.onChanged.removeListener(onChange)
-  }, [])
+  }, [dailyKey])
 
   useEffect(() => {
     if (!state) return
-
-    setSelectedMode(state.mode)
 
     const tick = () => {
       setRemainingMs(computeRemainingMs(state))
@@ -92,12 +146,18 @@ export function App() {
 
   const isIdle = state?.status === 'idle'
   const isRunning = state?.status === 'running'
-  const isPaused = state?.status === 'paused'
 
   const primaryAction = isIdle ? onStart : isRunning ? onPause : onResume
   const primaryLabel = isIdle ? 'Start' : isRunning ? 'Pause' : 'Resume'
+  const skipLabel = state?.phase === 'break' ? 'Skip break' : 'Skip'
+  const endLabel = state?.phase === 'break' ? 'End session' : 'Reset'
 
   const modeLabel = state?.phase ? state.phase.toUpperCase() : 'READY'
+
+  const domainStats = useMemo(
+    () => buildDomainStats(domainState),
+    [domainState],
+  )
 
   return (
     <main className="popup-shell">
@@ -115,6 +175,18 @@ export function App() {
         </p>
       </section>
 
+      {state?.phase === 'break' && (
+        <section className="break-card" aria-label="Break guidance">
+          <p className="break-title">Get away from the screen.</p>
+          <ul className="break-suggestions">
+            <li>Walk around</li>
+            <li>Look outside</li>
+            <li>Stretch</li>
+            <li>Drink water</li>
+          </ul>
+        </section>
+      )}
+
       <section className="mode-selector" aria-label="Mode selector">
         {(Object.keys(MODES) as TimerMode[]).map((mode) => (
           <button
@@ -123,7 +195,10 @@ export function App() {
             aria-pressed={selectedMode === mode}
             disabled={!isIdle}
             className={selectedMode === mode ? 'mode-active' : ''}
-            onClick={() => setSelectedMode(mode)}
+            onClick={() => {
+              setSelectedMode(mode)
+              void chrome.storage.local.set({ [PREFERRED_MODE_KEY]: mode })
+            }}
             title={`${MODES[mode].focus / 60_000}m focus / ${MODES[mode].break / 60_000}m break`}
           >
             {MODE_LABELS[mode]}
@@ -141,11 +216,11 @@ export function App() {
         </button>
 
         <button type="button" onClick={onSkip} disabled={isIdle}>
-          Skip
+          {skipLabel}
         </button>
 
         <button className="reset-action" type="button" onClick={onReset}>
-          Reset
+          {endLabel}
         </button>
       </section>
 
@@ -164,6 +239,72 @@ export function App() {
             <dd>{state ? formatDuration(state.longestFocusMs) : '00:00'}</dd>
           </div>
         </dl>
+      </section>
+
+      <section className="domain-stats" aria-label="Where your focus went">
+        <h2>Where your focus went</h2>
+        {domainStats.length === 0 ? (
+          <p className="domain-empty">
+            Start a focus session to track domains.
+          </p>
+        ) : (
+          <ul>
+            {domainStats.map(({ domain, ms }) => (
+              <li key={domain}>
+                <span className="domain-name" title={domain}>
+                  {domain}
+                </span>
+                <span className="domain-time">{formatTotalMinutes(ms)}</span>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+
+      <section className="daily-stats" aria-label="Daily dashboard">
+        <h2>Today</h2>
+        <dl className="daily-grid">
+          <div>
+            <dt>Focused</dt>
+            <dd>{formatTotalMinutes(daily?.totalFocusMs ?? 0)}</dd>
+          </div>
+          <div>
+            <dt>Breaks</dt>
+            <dd>{formatTotalMinutes(daily?.totalBreakMs ?? 0)}</dd>
+          </div>
+          <div>
+            <dt>Sessions</dt>
+            <dd>{daily?.completedSessions ?? 0}</dd>
+          </div>
+          <div>
+            <dt>Longest focus</dt>
+            <dd>{formatDuration(daily?.longestFocusMs ?? 0)}</dd>
+          </div>
+          <div>
+            <dt>Longest screen</dt>
+            <dd>{formatDuration(daily?.longestScreenMs ?? 0)}</dd>
+          </div>
+          <div>
+            <dt>Eye rests</dt>
+            <dd>{daily?.eyeRestReminders ?? 0}</dd>
+          </div>
+        </dl>
+
+        <h3>Top domains</h3>
+        {daily?.topDomains.length ? (
+          <ul>
+            {daily.topDomains.map(({ domain, ms }) => (
+              <li key={domain}>
+                <span className="domain-name" title={domain}>
+                  {domain}
+                </span>
+                <span className="domain-time">{formatTotalMinutes(ms)}</span>
+              </li>
+            ))}
+          </ul>
+        ) : (
+          <p className="domain-empty">No data yet.</p>
+        )}
       </section>
     </main>
   )

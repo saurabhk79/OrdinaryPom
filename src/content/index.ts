@@ -1,13 +1,5 @@
-interface ActiveWebsite {
-  hostname: string
-  updatedAt: number
-}
-
-const activeWebsite: ActiveWebsite = {
-  hostname: window.location.hostname,
-  updatedAt: Date.now(),
-}
-
-void chrome.storage.local.set({ activeWebsite })
-
-export {}
+chrome.runtime.onMessage.addListener((request, _sender, sendResponse) => {
+  if (request.type === 'getDomain') {
+    sendResponse({ hostname: window.location.hostname })
+  }
+})

@@ -1,2 +1,8 @@
 export const STORAGE_KEY = 'ordinaryPomTimer'
+export const SCREEN_TIME_KEY = 'ordinaryPomScreenTime'
+export const DOMAIN_KEY = 'ordinaryPomDomains'
+export const PREFERRED_MODE_KEY = 'ordinaryPomPreferredMode'
 export const ALARM_NAME = 'ordinaryPomTimerAlarm'
+export const EYE_BREAK_20 = 'ordinaryPomEyeBreak20'
+export const EYE_BREAK_40 = 'ordinaryPomEyeBreak40'
+export const SCREEN_CHECK = 'ordinaryPomScreenCheck'

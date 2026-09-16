@@ -205,3 +205,153 @@ button {
   font-weight: 600;
   color: #f3f4f6;
 }
+
+.domain-stats {
+  padding: 14px;
+  border: 1px solid #2a2d32;
+  border-radius: 10px;
+  background: #181b1e;
+}
+
+.domain-stats h2 {
+  margin: 0 0 10px;
+  color: #8f969e;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.domain-stats ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.domain-stats li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}
+
+.domain-name {
+  overflow: hidden;
+  color: #f3f4f6;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.domain-time {
+  color: #8f969e;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.domain-empty {
+  margin: 0;
+  color: #8f969e;
+  font-size: 0.85rem;
+}
+
+.break-card {
+  padding: 16px;
+  border: 1px solid #2a4a3a;
+  border-radius: 10px;
+  background: #151c18;
+  text-align: center;
+}
+
+.break-title {
+  margin: 0 0 12px;
+  color: #b8e0c8;
+  font-size: 1rem;
+  font-weight: 500;
+}
+
+.break-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.break-suggestions li {
+  padding: 5px 10px;
+  border: 1px solid #2a4a3a;
+  border-radius: 6px;
+  color: #b8e0c8;
+  font-size: 0.8rem;
+  background: #1b2420;
+}
+
+.daily-stats {
+  padding: 14px;
+  border: 1px solid #2a2d32;
+  border-radius: 10px;
+  background: #181b1e;
+}
+
+.daily-stats h2,
+.daily-stats h3 {
+  margin: 0 0 10px;
+  color: #8f969e;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+}
+
+.daily-stats h3 {
+  margin-top: 14px;
+}
+
+.daily-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px 16px;
+  margin: 0;
+}
+
+.daily-grid > div {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.daily-grid dt {
+  color: #8f969e;
+  font-size: 0.65rem;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.daily-grid dd {
+  margin: 0;
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #f3f4f6;
+}
+
+.daily-stats ul {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.daily-stats li {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 0.9rem;
+}

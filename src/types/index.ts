@@ -22,10 +22,40 @@ export interface TimerState {
   mode: TimerMode
   sessionNumber: number
   completedSessions: number
+  currentFocusMs: number
+  currentBreakMs: number
   totalFocusMs: number
+  totalBreakMs: number
   longestFocusMs: number
+  eyeReminders: Record<number, boolean>
   startedAt: number | null
   endsAt: number | null
   pausedRemaining: number | null
   updatedAt: number
+}
+
+export interface ScreenTimeState {
+  screenTimeMs: number
+  longestScreenMs: number
+  consecutiveIdleMinutes: number
+  lastUpdatedAt: number
+  shown: Record<number, boolean>
+}
+
+export interface DomainState {
+  currentDomain: string | null
+  startedAt: number | null
+  totals: Record<string, number>
+  lastUpdatedAt: number
+}
+
+export interface DailyStats {
+  date: string
+  totalFocusMs: number
+  completedSessions: number
+  totalBreakMs: number
+  longestFocusMs: number
+  longestScreenMs: number
+  eyeRestReminders: number
+  topDomains: { domain: string; ms: number }[]
 }
