@@ -1,5 +1,18 @@
-import { DEFAULT_MODE, MODES, type TimerMode, type TimerPhase, type TimerState } from '../types'
-import { ALARM_NAME, EYE_BREAK_20, EYE_BREAK_40, STORAGE_KEY } from '../shared/constants'
+import {
+  DEFAULT_MODE,
+  MODES,
+  type TimerMode,
+  type TimerPhase,
+  type TimerState,
+} from '../types'
+import {
+  ALARM_NAME,
+  BADGE_ALARM_NAME,
+  EYE_BREAK_20,
+  EYE_BREAK_40,
+  STORAGE_KEY,
+} from '../shared/constants'
+import { playTimerSound } from './sound'
 
 const now = () => Date.now()
 
@@ -41,18 +54,47 @@ export async function loadState(): Promise<TimerState> {
 export async function saveState(state: TimerState): Promise<TimerState> {
   const updated: TimerState = { ...state, updatedAt: now() }
   await chrome.storage.local.set({ [STORAGE_KEY]: updated })
+  void updateBadge(updated)
   return updated
+}
+
+// Update the extension badge with the remaining time
+export function updateBadge(state: TimerState): void {
+  if (state.status !== 'running' || state.endsAt == null) {
+    void chrome.action.setBadgeText({ text: '' })
+    return
+  }
+
+  const remainingSeconds = Math.max(0, Math.ceil((state.endsAt - now()) / 1000))
+  const minutes = Math.floor(remainingSeconds / 60)
+  const hours = Math.floor(minutes / 60)
+
+  let badgeText: string
+  if (hours > 0) {
+    badgeText = `${hours}h`
+  } else if (minutes > 0) {
+    badgeText = `${minutes}m`
+  } else {
+    badgeText = `${remainingSeconds}s`
+  }
+
+  void chrome.action.setBadgeText({ text: badgeText.slice(0, 4) })
+  void chrome.action.setBadgeBackgroundColor({ color: '#111315' })
 }
 
 // Set a browser alarm to trigger at a specific time
 async function setAlarm(when: number): Promise<void> {
   await chrome.alarms.clear(ALARM_NAME)
   await chrome.alarms.create(ALARM_NAME, { when })
+  await chrome.alarms.create(BADGE_ALARM_NAME, {
+    periodInMinutes: 1 / 60,
+  })
 }
 
 // Clear the browser alarm
 async function clearAlarm(): Promise<void> {
   await chrome.alarms.clear(ALARM_NAME)
+  await chrome.alarms.clear(BADGE_ALARM_NAME)
 }
 
 async function clearEyeBreakAlarms(): Promise<void> {
@@ -63,7 +105,11 @@ async function clearEyeBreakAlarms(): Promise<void> {
 async function setEyeBreakAlarms(state: TimerState, t = now()): Promise<void> {
   await clearEyeBreakAlarms()
 
-  if (state.phase !== 'focus' || state.status !== 'running' || state.startedAt == null) {
+  if (
+    state.phase !== 'focus' ||
+    state.status !== 'running' ||
+    state.startedAt == null
+  ) {
     return
   }
 
@@ -123,7 +169,8 @@ function enterBreak(state: TimerState, t = now()): TimerState {
 // Transition to the next phase of the timer - focus to break or break to focus
 function transitionToNextPhase(state: TimerState, t = now()): TimerState {
   if (state.phase === 'focus') {
-    const segment = state.startedAt != null ? Math.max(0, t - state.startedAt) : 0
+    const segment =
+      state.startedAt != null ? Math.max(0, t - state.startedAt) : 0
     const focusElapsed = state.currentFocusMs + segment
 
     return {
@@ -142,7 +189,8 @@ function transitionToNextPhase(state: TimerState, t = now()): TimerState {
   }
 
   if (state.phase === 'break') {
-    const segment = state.startedAt != null ? Math.max(0, t - state.startedAt) : 0
+    const segment =
+      state.startedAt != null ? Math.max(0, t - state.startedAt) : 0
 
     return {
       ...enterFocus(state, state.mode, t),
@@ -214,7 +262,11 @@ export async function pauseTimer(): Promise<TimerState> {
   const state = await ensureState()
   const t = now()
 
-  if (state.status !== 'running' || state.endsAt == null || state.startedAt == null) {
+  if (
+    state.status !== 'running' ||
+    state.endsAt == null ||
+    state.startedAt == null
+  ) {
     return state
   }
 
@@ -225,13 +277,21 @@ export async function pauseTimer(): Promise<TimerState> {
     ...state,
     status: 'paused',
     currentFocusMs:
-      state.phase === 'focus' ? state.currentFocusMs + Math.max(0, elapsed) : state.currentFocusMs,
+      state.phase === 'focus'
+        ? state.currentFocusMs + Math.max(0, elapsed)
+        : state.currentFocusMs,
     currentBreakMs:
-      state.phase === 'break' ? state.currentBreakMs + Math.max(0, elapsed) : state.currentBreakMs,
+      state.phase === 'break'
+        ? state.currentBreakMs + Math.max(0, elapsed)
+        : state.currentBreakMs,
     totalFocusMs:
-      state.phase === 'focus' ? state.totalFocusMs + Math.max(0, elapsed) : state.totalFocusMs,
+      state.phase === 'focus'
+        ? state.totalFocusMs + Math.max(0, elapsed)
+        : state.totalFocusMs,
     totalBreakMs:
-      state.phase === 'break' ? state.totalBreakMs + Math.max(0, elapsed) : state.totalBreakMs,
+      state.phase === 'break'
+        ? state.totalBreakMs + Math.max(0, elapsed)
+        : state.totalBreakMs,
     startedAt: null,
     endsAt: null,
     pausedRemaining: Math.max(0, remaining),
@@ -318,7 +378,14 @@ export async function handleAlarm(): Promise<TimerState> {
     return state
   }
 
+  const previousPhase = state.phase
   const next = transitionToNextPhase(state, state.endsAt)
+
+  if (previousPhase === 'focus') {
+    void notifyPhaseComplete('break')
+  } else if (previousPhase === 'break') {
+    void notifyPhaseComplete('focus')
+  }
 
   if (next.endsAt != null) {
     await setAlarm(next.endsAt)
@@ -326,6 +393,26 @@ export async function handleAlarm(): Promise<TimerState> {
   }
 
   return saveState(next)
+}
+
+// Show a system notification and play a sound when a phase finishes
+async function notifyPhaseComplete(
+  nextPhase: 'focus' | 'break',
+): Promise<void> {
+  const title = nextPhase === 'break' ? 'Focus complete' : 'Break over'
+  const message =
+    nextPhase === 'break'
+      ? 'Great work. Take a short break.'
+      : 'Back to focused work.'
+
+  void chrome.notifications.create('', {
+    type: 'basic',
+    iconUrl: chrome.runtime.getURL('icon.png'),
+    title: `OrdinaryPom · ${title}`,
+    message,
+  })
+
+  await playTimerSound(nextPhase === 'focus' ? 523.25 : 440)
 }
 
 // Restore the alarm when the extension starts up
@@ -340,6 +427,7 @@ export async function restoreAlarmOnStartup(): Promise<TimerState> {
     await clearEyeBreakAlarms()
   }
 
+  updateBadge(state)
   return state
 }
 
@@ -353,11 +441,17 @@ export async function handleEyeBreakAlarm(alarmName: string): Promise<void> {
     await setAlarm(state.endsAt)
   }
 
-  if (state.phase !== 'focus' || state.status !== 'running' || state.eyeReminders[threshold]) {
+  if (
+    state.phase !== 'focus' ||
+    state.status !== 'running' ||
+    state.eyeReminders[threshold]
+  ) {
     return
   }
 
-  const elapsed = state.currentFocusMs + (state.startedAt != null ? Math.max(0, t - state.startedAt) : 0)
+  const elapsed =
+    state.currentFocusMs +
+    (state.startedAt != null ? Math.max(0, t - state.startedAt) : 0)
 
   if (elapsed < threshold) {
     await setEyeBreakAlarms(state, t)
@@ -373,9 +467,10 @@ export async function handleEyeBreakAlarm(alarmName: string): Promise<void> {
   await saveState(next)
   await chrome.notifications.create('', {
     type: 'basic',
-    iconUrl: '',
+    iconUrl: chrome.runtime.getURL('icon.png'),
     title: 'OrdinaryPom',
     message: EYE_MESSAGES[threshold],
     silent: true,
   })
+  await playTimerSound(880)
 }

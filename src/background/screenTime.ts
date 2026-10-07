@@ -37,7 +37,7 @@ async function saveState(state: ScreenTimeState): Promise<void> {
 async function showWarning(message: string): Promise<void> {
   await chrome.notifications.create('', {
     type: 'basic',
-    iconUrl: '',
+    iconUrl: chrome.runtime.getURL('icon.png'),
     title: 'OrdinaryPom',
     message,
     silent: true,

@@ -7,7 +7,11 @@ import {
   type TimerMode,
   type TimerState,
 } from '../types'
-import { DOMAIN_KEY, PREFERRED_MODE_KEY, STORAGE_KEY } from '../shared/constants'
+import {
+  DOMAIN_KEY,
+  PREFERRED_MODE_KEY,
+  STORAGE_KEY,
+} from '../shared/constants'
 import { formatDuration, formatTotalMinutes } from '../shared/time'
 
 const MODE_LABELS: Record<TimerMode, string> = {
@@ -36,7 +40,10 @@ function sendCommand(command: TimerCommand): Promise<TimerState> {
   })
 }
 
-function computeRemainingMs(state: TimerState | null): number {
+function computeRemainingMs(
+  state: TimerState | null,
+  selectedMode: TimerMode,
+): number {
   if (!state) return 0
 
   if (state.status === 'running' && state.endsAt != null) {
@@ -47,11 +54,13 @@ function computeRemainingMs(state: TimerState | null): number {
     return state.pausedRemaining
   }
 
+  const previewMode = state.status === 'idle' ? selectedMode : state.mode
+
   if (state.phase === 'break') {
-    return MODES[state.mode].break
+    return MODES[previewMode].break
   }
 
-  return MODES[state.mode ?? DEFAULT_MODE].focus
+  return MODES[previewMode].focus
 }
 
 function buildDomainStats(
@@ -79,6 +88,7 @@ export function App() {
   const [selectedMode, setSelectedMode] = useState<TimerMode>(DEFAULT_MODE)
   const [domainState, setDomainState] = useState<DomainState | null>(null)
   const [daily, setDaily] = useState<DailyStats | null>(null)
+  const [showStats, setShowStats] = useState(false)
 
   const dailyKey = useMemo(
     () => `ordinaryPomDaily:${new Date().toLocaleDateString('en-CA')}`,
@@ -125,13 +135,13 @@ export function App() {
     if (!state) return
 
     const tick = () => {
-      setRemainingMs(computeRemainingMs(state))
+      setRemainingMs(computeRemainingMs(state, selectedMode))
     }
 
     tick()
     const interval = setInterval(tick, 1000)
     return () => clearInterval(interval)
-  }, [state])
+  }, [state, selectedMode])
 
   useEffect(() => {
     const onBeforeUnload = (event: BeforeUnloadEvent) => {
@@ -175,17 +185,175 @@ export function App() {
     <main className="popup-shell">
       <header className="popup-header">
         <h1>OrdinaryPom</h1>
+
+        <button
+          type="button"
+          className="hamburger"
+          aria-label={showStats ? 'Show timer' : 'Show stats'}
+          aria-pressed={showStats}
+          onClick={() => setShowStats((v) => !v)}
+        >
+          <span />
+          <span />
+          <span />
+        </button>
       </header>
 
-      <section className="timer" aria-label="Current timer">
-        <p className="timer-phase">{modeLabel}</p>
-        <time className="timer-display" dateTime="PT1M">
-          {formatDuration(remainingMs)}
-        </time>
-        <p className="timer-session">
-          {state ? `Session ${state.sessionNumber}` : 'Set a mode below'}
-        </p>
-      </section>
+      {showStats ? (
+        <>
+          <section className="stats" aria-label="Daily statistics">
+            <dl>
+              <div>
+                <dt>Focused</dt>
+                <dd>{state ? formatTotalMinutes(state.totalFocusMs) : '0m'}</dd>
+              </div>
+              <div>
+                <dt>Sessions</dt>
+                <dd>{state?.completedSessions ?? 0}</dd>
+              </div>
+              <div>
+                <dt>Longest</dt>
+                <dd>
+                  {state ? formatDuration(state.longestFocusMs) : '00:00'}
+                </dd>
+              </div>
+            </dl>
+          </section>
+
+          <section className="domain-stats" aria-label="Where your focus went">
+            <h2>Where your focus went</h2>
+            {domainStats.length === 0 ? (
+              <p className="domain-empty">
+                Start a focus session to track domains.
+              </p>
+            ) : (
+              <ul>
+                {domainStats.map(({ domain, ms }) => (
+                  <li key={domain}>
+                    <span className="domain-name" title={domain}>
+                      {domain}
+                    </span>
+                    <span className="domain-time">
+                      {formatTotalMinutes(ms)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </section>
+
+          <section className="daily-stats" aria-label="Daily dashboard">
+            <h2>Today</h2>
+            <dl className="daily-grid">
+              <div>
+                <dt>Focused</dt>
+                <dd>{formatTotalMinutes(daily?.totalFocusMs ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Breaks</dt>
+                <dd>{formatTotalMinutes(daily?.totalBreakMs ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Sessions</dt>
+                <dd>{daily?.completedSessions ?? 0}</dd>
+              </div>
+              <div>
+                <dt>Longest focus</dt>
+                <dd>{formatDuration(daily?.longestFocusMs ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Longest screen</dt>
+                <dd>{formatDuration(daily?.longestScreenMs ?? 0)}</dd>
+              </div>
+              <div>
+                <dt>Eye rests</dt>
+                <dd>{daily?.eyeRestReminders ?? 0}</dd>
+              </div>
+            </dl>
+
+            <h3>Top domains</h3>
+            {daily?.topDomains.length ? (
+              <ul>
+                {daily.topDomains.map(({ domain, ms }) => (
+                  <li key={domain}>
+                    <span className="domain-name" title={domain}>
+                      {domain}
+                    </span>
+                    <span className="domain-time">
+                      {formatTotalMinutes(ms)}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            ) : (
+              <p className="domain-empty">No data yet.</p>
+            )}
+          </section>
+        </>
+      ) : (
+        <>
+          <section className="timer" aria-label="Current timer">
+            <p className="timer-phase">{modeLabel}</p>
+            <time className="timer-display" dateTime="PT1M">
+              {formatDuration(remainingMs)}
+            </time>
+            <p className="timer-session">
+              {state ? `Session ${state.sessionNumber}` : 'Set a mode below'}
+            </p>
+          </section>
+
+          {state?.phase === 'break' && (
+            <section className="break-card" aria-label="Break guidance">
+              <p className="break-title">Get away from the screen.</p>
+              <ul className="break-suggestions">
+                <li>Walk around</li>
+                <li>Look outside</li>
+                <li>Stretch</li>
+                <li>Drink water</li>
+              </ul>
+            </section>
+          )}
+
+          <section className="mode-selector" aria-label="Mode selector">
+            {(Object.keys(MODES) as TimerMode[]).map((mode) => (
+              <button
+                key={mode}
+                type="button"
+                aria-pressed={selectedMode === mode}
+                disabled={!isIdle}
+                className={selectedMode === mode ? 'mode-active' : ''}
+                onClick={() => {
+                  setSelectedMode(mode)
+                  void chrome.storage.local.set({
+                    [PREFERRED_MODE_KEY]: mode,
+                  })
+                }}
+                title={`${MODES[mode].focus / 60_000}m focus / ${MODES[mode].break / 60_000}m break`}
+              >
+                {MODE_LABELS[mode]}
+              </button>
+            ))}
+          </section>
+
+          <section className="controls" aria-label="Timer controls">
+            <button
+              className="primary-action"
+              type="button"
+              onClick={primaryAction}
+            >
+              {primaryLabel}
+            </button>
+
+            <button type="button" onClick={onSkip} disabled={isIdle}>
+              {skipLabel}
+            </button>
+
+            <button className="reset-action" type="button" onClick={onReset}>
+              {endLabel}
+            </button>
+          </section>
+        </>
+      )}
 
       {state?.phase === 'break' && (
         <section className="break-card" aria-label="Break guidance">
@@ -198,126 +366,6 @@ export function App() {
           </ul>
         </section>
       )}
-
-      <section className="mode-selector" aria-label="Mode selector">
-        {(Object.keys(MODES) as TimerMode[]).map((mode) => (
-          <button
-            key={mode}
-            type="button"
-            aria-pressed={selectedMode === mode}
-            disabled={!isIdle}
-            className={selectedMode === mode ? 'mode-active' : ''}
-            onClick={() => {
-              setSelectedMode(mode)
-              void chrome.storage.local.set({ [PREFERRED_MODE_KEY]: mode })
-            }}
-            title={`${MODES[mode].focus / 60_000}m focus / ${MODES[mode].break / 60_000}m break`}
-          >
-            {MODE_LABELS[mode]}
-          </button>
-        ))}
-      </section>
-
-      <section className="controls" aria-label="Timer controls">
-        <button
-          className="primary-action"
-          type="button"
-          onClick={primaryAction}
-        >
-          {primaryLabel}
-        </button>
-
-        <button type="button" onClick={onSkip} disabled={isIdle}>
-          {skipLabel}
-        </button>
-
-        <button className="reset-action" type="button" onClick={onReset}>
-          {endLabel}
-        </button>
-      </section>
-
-      <section className="stats" aria-label="Daily statistics">
-        <dl>
-          <div>
-            <dt>Focused</dt>
-            <dd>{state ? formatTotalMinutes(state.totalFocusMs) : '0m'}</dd>
-          </div>
-          <div>
-            <dt>Sessions</dt>
-            <dd>{state?.completedSessions ?? 0}</dd>
-          </div>
-          <div>
-            <dt>Longest</dt>
-            <dd>{state ? formatDuration(state.longestFocusMs) : '00:00'}</dd>
-          </div>
-        </dl>
-      </section>
-
-      <section className="domain-stats" aria-label="Where your focus went">
-        <h2>Where your focus went</h2>
-        {domainStats.length === 0 ? (
-          <p className="domain-empty">
-            Start a focus session to track domains.
-          </p>
-        ) : (
-          <ul>
-            {domainStats.map(({ domain, ms }) => (
-              <li key={domain}>
-                <span className="domain-name" title={domain}>
-                  {domain}
-                </span>
-                <span className="domain-time">{formatTotalMinutes(ms)}</span>
-              </li>
-            ))}
-          </ul>
-        )}
-      </section>
-
-      <section className="daily-stats" aria-label="Daily dashboard">
-        <h2>Today</h2>
-        <dl className="daily-grid">
-          <div>
-            <dt>Focused</dt>
-            <dd>{formatTotalMinutes(daily?.totalFocusMs ?? 0)}</dd>
-          </div>
-          <div>
-            <dt>Breaks</dt>
-            <dd>{formatTotalMinutes(daily?.totalBreakMs ?? 0)}</dd>
-          </div>
-          <div>
-            <dt>Sessions</dt>
-            <dd>{daily?.completedSessions ?? 0}</dd>
-          </div>
-          <div>
-            <dt>Longest focus</dt>
-            <dd>{formatDuration(daily?.longestFocusMs ?? 0)}</dd>
-          </div>
-          <div>
-            <dt>Longest screen</dt>
-            <dd>{formatDuration(daily?.longestScreenMs ?? 0)}</dd>
-          </div>
-          <div>
-            <dt>Eye rests</dt>
-            <dd>{daily?.eyeRestReminders ?? 0}</dd>
-          </div>
-        </dl>
-
-        <h3>Top domains</h3>
-        {daily?.topDomains.length ? (
-          <ul>
-            {daily.topDomains.map(({ domain, ms }) => (
-              <li key={domain}>
-                <span className="domain-name" title={domain}>
-                  {domain}
-                </span>
-                <span className="domain-time">{formatTotalMinutes(ms)}</span>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="domain-empty">No data yet.</p>
-        )}
-      </section>
     </main>
   )
 }

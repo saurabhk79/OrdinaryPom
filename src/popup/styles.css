@@ -31,11 +31,63 @@ button {
   gap: 24px;
 }
 
+.popup-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
 .popup-header h1 {
   margin: 0;
   font-size: 1.1rem;
   font-weight: 600;
   letter-spacing: -0.02em;
+}
+
+.hamburger {
+  position: relative;
+  width: 22px;
+  height: 18px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+}
+
+.hamburger span {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 2px;
+  background: #e5e7eb;
+  border-radius: 2px;
+  transition: transform 200ms ease, opacity 200ms ease, top 200ms ease;
+}
+
+.hamburger span:nth-child(1) {
+  top: 2px;
+}
+
+.hamburger span:nth-child(2) {
+  top: 10px;
+}
+
+.hamburger span:nth-child(3) {
+  top: 18px;
+}
+
+.hamburger[aria-pressed="true"] span:nth-child(1) {
+  top: 10px;
+  transform: rotate(45deg);
+}
+
+.hamburger[aria-pressed="true"] span:nth-child(2) {
+  opacity: 0;
+}
+
+.hamburger[aria-pressed="true"] span:nth-child(3) {
+  top: 10px;
+  transform: rotate(-45deg);
 }
 
 .timer {
@@ -116,7 +168,6 @@ button {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
-  margin-top: auto;
 }
 
 .controls button {
